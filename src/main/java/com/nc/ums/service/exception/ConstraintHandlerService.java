@@ -23,7 +23,14 @@ public class ConstraintHandlerService {
         if (existing == null) {
             throw new RuntimeException("Insert failed but no existing record for messageId=" + messageId);
         }
+        
+        if ("NEW".equals(existing.getStatus())) {
+            return false;
+        }
         if ("SUCCESS".equals(existing.getStatus())) {
+            return false;
+        }
+        if ("PROCESSING".equals(existing.getStatus())) {
             return false;
         }
 
