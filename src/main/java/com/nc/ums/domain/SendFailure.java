@@ -2,6 +2,7 @@ package com.nc.ums.domain;
 
 import java.time.LocalDateTime;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -36,6 +37,8 @@ public class SendFailure {
     @Lob
     private String errorMessage;
     private LocalDateTime occurredAt;
+    
+    @Column(nullable = false) // null 불가능 보장
     private Boolean handled = false;
     private String handledBy;
     private LocalDateTime handledAt;

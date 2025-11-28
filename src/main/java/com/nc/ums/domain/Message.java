@@ -40,7 +40,9 @@ public class Message {
     private String payload;
 
     @Column(nullable = false)
-    private String status; // NEW, PROCESSING, SUCCESS, FAILED
+    private String status; // NEW, PROCESSING, SUCCESS, FAILED , DISPATCHED , DELIVERY_FAILED , SEND_ERROR , RETRY
+    
+    private int attemptCount = 0 ;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
