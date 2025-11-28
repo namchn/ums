@@ -42,6 +42,7 @@ public class Message {
     @Column(nullable = false)
     private String status; // NEW, PROCESSING, SUCCESS, FAILED , DISPATCHED , DELIVERY_FAILED , SEND_ERROR , RETRY
     
+    @Column(nullable = false)
     private int attemptCount = 0 ;
 
     private LocalDateTime createdAt;

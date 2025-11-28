@@ -3,7 +3,6 @@ package com.nc.ums.service;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
@@ -16,7 +15,7 @@ import com.nc.ums.repo.OutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-@EnableScheduling // 스케줄링 기능 활성화
+//@EnableScheduling // 스케줄링 기능 활성화
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -24,6 +23,7 @@ public class OutboxDispatcher {
 
  private final OutboxRepository outboxRepo;
  private final OutboxProcessor outboxProcessor;
+ //private final SmtpEmailSender emailSender;
  private final EmailSender emailSender;
  
  //injected executor bean
@@ -66,7 +66,7 @@ public class OutboxDispatcher {
          
          
          // ---- 핵심: 비동기 제출하여 dispatch 스레드는 빠르게 다음 항목으로 진행 ----
-         // 결과 종속적이지 않은 독립된 것은 
+         // 결과 종속적이지 않은 독립된 것은 비동기
          outboxTaskExecutor.execute(() -> {
              boolean success = false;
              String errorMessage = null;

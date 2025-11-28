@@ -28,17 +28,22 @@ public class OutboxProcessor {
     public boolean claimMessage(Outbox r) {
     	
     	// 1. 선점/업데이트
-        if (r == null || Boolean.TRUE.equals(r.getPublished())) return false;
-        String messageId = r.getAggregateId();
-        int updated = msgRepo.updateStatusIf(messageId, MessageStatus.NEW, MessageStatus.PROCESSING);
+    	Outbox out = outboxRepo.findById(r.getId()).orElse(null);
+        if (out == null || Boolean.TRUE.equals(out.getPublished())) return false;
+    	
+        // 트렌젝선 내에서 처리해야 함
+        //if (r == null || Boolean.TRUE.equals(r.getPublished())) return false;
+        
+        String messageId = out.getAggregateId();
+        int updated = msgRepo.updateStatusIf(messageId, MessageStatus.NEW.name(), MessageStatus.PROCESSING.name());
         
         // 1 이면 처리 요청 ,0 은 이미 처리중임.
         if (updated == 0) {
-            log.info("Message id={} already processed. Skipping.", r.getAggregateId());
+            log.info("Message id={} already processed. Skipping.", messageId);
             return false; // 선점 실패, 트랜잭션 커밋 후 종료
         }
 
-        log.info("Message id={} successfully claimed. Proceeding with dispatch.", r.getAggregateId());
+        log.info("Message id={} successfully claimed. Proceeding with dispatch.", messageId);
         
         // 2. (선택사항) 트랜잭션 커밋 후 외부 시스템 호출
         // 외부 호출은 트랜잭션과 독립적으로 처리하는 것이 좋습니다.
@@ -68,13 +73,13 @@ public class OutboxProcessor {
             if (success) {
                 // SMTP/외부 API가 2xx 응답을 줘서 정상적으로 메일서버에 전달된 상태
                 //msg.setStatus(MessageStatus.DISPATCHED);
-                msg.setStatus(MessageStatus.SUCCESS);
+                msg.setStatus(MessageStatus.SUCCESS.name());
             } else {
                 // errorMessage를 보고 분류
                 if (errorMessage != null && errorMessage.startsWith("SMTP_ERROR:")) {
-                    msg.setStatus(MessageStatus.DELIVERY_FAILED);
+                    msg.setStatus(MessageStatus.DELIVERY_FAILED.name());
                 } else {
-                    msg.setStatus(MessageStatus.SEND_ERROR);
+                    msg.setStatus(MessageStatus.SEND_ERROR.name());
                 }
                 // 실패 카운트 증가
                 Integer attempts = msg.getAttemptCount() == 0 ? 0 : msg.getAttemptCount();
