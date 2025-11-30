@@ -43,7 +43,7 @@ ums/
 │ └── Outbox : 메시지 발송 엔티티
 ├── email/
 │ ├── config/
-│ │ └── AsyncConfig : 동기 처리 쓰레드 관련 값 설정
+│ │ └── AsyncConfig : 비동기 처리 쓰레드 관련 값 설정
 │ ├── EmailSender : 이메일 발송 로직
 │ ├── SmtpSendException : 이메일 발송 예외처리값
 ├── service/
@@ -60,7 +60,7 @@ ums/
 
 
 
-# 개선점 및 구현 목표 
+#개선점 및 구현 목표 
 ```
  1. 확장성 고려
  2. 정교화
@@ -70,7 +70,7 @@ ums/
 
 
 
-# 소스 팁
+#소스 팁
 ```
  1. 클래스에 @EnableScheduling 붙이는 건 보통 @Configuration에 두는 게 좋음(전역 설정)
  2. 상태 문자열 상수화 (enum or constants class)
@@ -88,54 +88,90 @@ ums/
 
 #남은 작업(우선순위별 체크리스트)
 ```
-아래는 실무 운영·면접 준비 관점에서 우선순위를 매긴 작업 목록입니다. (위에서 가장 중요한 것부터)
+우선순위 목록 (실전 권장 순서)
 
-P0 — 반드시 처리해야 할 것 (안정성/정합성)
+P1 — 운영성·가시성 (우선 적용 권장)
 
-attemptCount null-safe 고치기 (이미 리마인드했지만 최우선).
+Micrometer 메트릭 추가
 
-persistSendResult에서 상태값 일관성 유지(성공 → DISPATCHED or SUCCESS 중 팀 표준으로 통일).
+목표: outbox.backlog, send.failures{type}, claim.failures, dispatch.duration 등 수집
 
-ConstraintHandlerService 보수적 기본 동작으로 고정 (unknown → false + log + alert).
+검증: Prometheus(또는 local meter registry)에서 메트릭 확인
 
-Outbox published=true 타이밍 재확인 (반드시 전송 시도 후).
+Structured logging 규칙 통일
 
-updateStatusIf 사용 패턴 재검증(선점은 update만, 이후에는 새 트랜잭션에서 조회/저장).
+목표: 모든 핵심 로그에 messageId, outboxId, attemptCount, errorType 포함
 
-P1 — 운영성·관찰성(모니터링 포함)
+검증: 로그 검색에서 필드로 필터링 가능
 
-ThreadPool/ Scheduling 설정을 config로 외부화 (application.yml) 및 모니터링 지표 추가.
+EmailSender 인터페이스화 + 테스트 더블
 
-Micrometer 도입: outbox.backlog, send.failure.count{type}, claim.failures, dispatch.timer.
+목표: EmailSender를 인터페이스로 추출, 테스트용 NoopEmailSender/FailingEmailSender 구현
 
-Structured logs: 항상 messageId, outboxId, attemptCount 포함.
+검증: Unit test에서 실제 네트워크 호출 없이 시나리오 검증
 
-Test doubles: EmailSender 테스트 구현(성공/SMTP-fail/IO-fail).
+OutboxRepository 보조 메서드 추가/인덱스
 
-P2 — 기능 보강(운영 편의성)
+목표: existsByAggregateIdAndPublishedFalse, findTopNByPublishedFalseOrderByCreatedAt 추가 + DB 인덱스(aggregateId, published, createdAt)
 
-AdminController + FailureAdminService (단건 재시도, handled 플래그) 구현 완료.
+검증: 쿼리 실행계획 및 성능 확인
 
-OutboxRepository 보조 메서드: existsByAggregateIdAndPublishedFalse, findTopNUnpublishedOrderByCreatedAt.
+AdminController 단건 재시도 경로 완성
 
-Add DLQ / manual review path when attempts exceed threshold.
+목표: PATCH /admin/failures/{id}/retry 구현 (권한 보호, audit 기록)
 
-Add processingStartedAt in Message entity (future stale detection).
+검증: 관리자 요청 시 Outbox 재생성 및 handled=true 기록
 
-P3 — 중장기(스케일 / 아키텍처)
+P2 — 안정성·정책
 
-Unit + Integration test suite (Testcontainers for DB).
+DLQ / Manual review flow
 
-Service 계층 인터페이스화 (MessageService, OutboxService) → mockability.
+목표: attemptCount >= MAX 시 SendFailure → DLQ 이동 또는 MANUAL_REVIEW 상태
 
-Consider event-driven: Outbox → Kafka producer or Debezium CDC for high scale.
+검증: 시뮬레이션으로 attempts 초과 시 DLQ row 생성
 
-Status machine for Loan domain (Spring State Machine or custom).
+PROCESSING 스테일 탐지(간단 버전)
+
+목표: processingStartedAt 필드 추가(선점시 set), 스케줄러로 오래된 PROCESSING을 재큐
+
+검증: 인위적 타임스탬프 변경 후 reclaim 동작 확인
+
+Payload validation + rate limiting
+
+목표: DTO 기반 validation + request size limit + simple rate limiting (IP or API key)
+
+검증: Invalid payload -> 400, Rate limit exceed -> 429
+
+P3 — 중장기·확장
+
+Unit & Integration 테스트 완성
+
+목표: Testcontainers 기반 E2E 테스트(duplicate inserts, claim race, success/failure flows)
+
+검증: CI에서 테스트 통과
+
+Service 계층 인터페이스화 (MessageService, OutboxService)
+
+목표: 인터페이스 추출, 구현 교체 용이성 확보
+
+검증: 테스트에서 mocking으로 서비스 교체 가능
+
+이벤트 기반 아키텍처 고려 (Kafka/CDC)
+
+목표: 대량 처리·리플레이 요구 발생 시 Outbox→Kafka 전환 설계문서 작성
+
+검증: PoC로 DB outbox→Kafka producer 구현(소규모)
+
+Loan 도메인 상태머신 도입
+
+목표: Loan 상태 전이는 state machine으로 관리(규칙/테스트 쉬움)
+
+검증: 상태별 전이 테이블과 유닛 테스트
 ```
 
 
 
-# 깃 기본 명령어 모음
+#깃 기본 명령어 모음
 ```
 
 git init
@@ -147,4 +183,6 @@ git push origin main
 
 ```
 
-
+```
+부분별로 chatGPT 를 활용하여 학습 및 개발, 작성 하였습니다.
+```

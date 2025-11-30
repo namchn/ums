@@ -18,7 +18,7 @@ public class SmtpEmailSender  implements EmailSender {
      */
     public void send(String payload) {
         // --- 예시: 실제 SMTP 클라이언트 또는 외부 API 호출 코드가 여기에 위치 ---
-        // 아래는 예시 시뮬레이션 코드입니다. 실제 환경에서는 JavaMailSender/SMTP 라이브러리나 HTTP 클라이언트를 사용하세요.
+        // 아래는 예시 시뮬레이션 코드입니다. 실제 환경에서는 JavaMailSender/SMTP 라이브러리나 HTTP 클라이언트를 사용
 
         try {
             // 예시: payload에 "forceFailSMTP":true 가 있으면 SMTP 응답 실패 시뮬
