@@ -86,87 +86,58 @@ ums/
 
 
 
-#남은 작업(우선순위별 체크리스트)
+#설계에서 고려할 점.
 ```
-우선순위 목록 (실전 권장 순서)
 
-P1 — 운영성·가시성 (우선 적용 권장)
+아키텍처 / 설계
+1. Outbox 패턴
 
-Micrometer 메트릭 추가
+DB 트랜잭션과 외부 전송 간 정합성을 보장하기 위해, 
+Message(원장)+Outbox(발행)를 동일 트랜잭션에 저장하고 외부 전송은 Outbox를 소비하는 방식으로 분리.
 
-목표: outbox.backlog, send.failures{type}, claim.failures, dispatch.duration 등 수집
+2.멱등성 보장
 
-검증: Prometheus(또는 local meter registry)에서 메트릭 확인
+클라이언트 제공 ID와 DB unique 제약으로 식별하고, 
+중복 충돌은 별도 REQUIRES_NEW 트랜잭션에서 판단.
 
-Structured logging 규칙 통일
+3.동시성 제어(선점)
 
-목표: 모든 핵심 로그에 messageId, outboxId, attemptCount, errorType 포함
+DB 조건부 업데이트로 선점하고 반환된 row count로 성공/실패(0/1)를 판단하는 
+lock-free CAS 패턴 (UPDATE ... WHERE status='NEW')사용.
 
-검증: 로그 검색에서 필드로 필터링 가능
+4.전송 실패 관리
 
-EmailSender 인터페이스화 + 테스트 더블
+전송은 트랜잭션 경계 밖에서 수행하고, 결과만 별도 트랜잭션에서 반영하여 
+실패는 SendFailure에 적재하고 재시도/수동 재처리(DLQ/manual) 정책으로 관리.
 
-목표: EmailSender를 인터페이스로 추출, 테스트용 NoopEmailSender/FailingEmailSender 구현
 
-검증: Unit test에서 실제 네트워크 호출 없이 시나리오 검증
+트랜잭션 / JPA
+5.JPQL update 후 영속성 컨텍스트
 
-OutboxRepository 보조 메서드 추가/인덱스
+JPQL update는 DB만 변경하므로 동일 트랜잭션에서 이미 로드한 엔티티를 신뢰하지 않고, 
+필요한 경우 재조회하거나 트랜잭션을 분리.
 
-목표: existsByAggregateIdAndPublishedFalse, findTopNByPublishedFalseOrderByCreatedAt 추가 + DB 인덱스(aggregateId, published, createdAt)
+6.메일 발송 호출(send()) 트랜잭션 밖에서 호출
 
-검증: 쿼리 실행계획 및 성능 확인
+네트워크 호출은 지연 요인이므로 DB 트랜잭션 밖에서 실행해 커넥션/락을 비동기화
 
-AdminController 단건 재시도 경로 완성
 
-목표: PATCH /admin/failures/{id}/retry 구현 (권한 보호, audit 기록)
+운영 · 확장성
+7.모니터링 방법
 
-검증: 관리자 요청 시 Outbox 재생성 및 handled=true 기록
+outbox 에 실패 데이터(backlog, failure rate) 알람, 이상 시 DLQ/수동 개입 루트를 활성화.
 
-P2 — 안정성·정책
+8.대량 발송 시 병목 해소 방법
 
-DLQ / Manual review flow
+worker pool, rate limiting, TPS 제어, batching, Outbox→Kafka로 전환.
 
-목표: attemptCount >= MAX 시 SendFailure → DLQ 이동 또는 MANUAL_REVIEW 상태
 
-검증: 시뮬레이션으로 attempts 초과 시 DLQ row 생성
+보안·규정
+9. 개인 정보 관리 
 
-PROCESSING 스테일 탐지(간단 버전)
+민감정보는 DB에 암호화 저장하고 admin 작업은 접근 제어.
 
-목표: processingStartedAt 필드 추가(선점시 set), 스케줄러로 오래된 PROCESSING을 재큐
 
-검증: 인위적 타임스탬프 변경 후 reclaim 동작 확인
-
-Payload validation + rate limiting
-
-목표: DTO 기반 validation + request size limit + simple rate limiting (IP or API key)
-
-검증: Invalid payload -> 400, Rate limit exceed -> 429
-
-P3 — 중장기·확장
-
-Unit & Integration 테스트 완성
-
-목표: Testcontainers 기반 E2E 테스트(duplicate inserts, claim race, success/failure flows)
-
-검증: CI에서 테스트 통과
-
-Service 계층 인터페이스화 (MessageService, OutboxService)
-
-목표: 인터페이스 추출, 구현 교체 용이성 확보
-
-검증: 테스트에서 mocking으로 서비스 교체 가능
-
-이벤트 기반 아키텍처 고려 (Kafka/CDC)
-
-목표: 대량 처리·리플레이 요구 발생 시 Outbox→Kafka 전환 설계문서 작성
-
-검증: PoC로 DB outbox→Kafka producer 구현(소규모)
-
-Loan 도메인 상태머신 도입
-
-목표: Loan 상태 전이는 state machine으로 관리(규칙/테스트 쉬움)
-
-검증: 상태별 전이 테이블과 유닛 테스트
 ```
 
 
