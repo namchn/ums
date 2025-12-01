@@ -90,51 +90,46 @@ ums/
 ```
 
 아키텍처 / 설계
-1. Outbox 패턴
 
+1. Outbox 패턴
 DB 트랜잭션과 외부 전송 간 정합성을 보장하기 위해, 
 Message(원장)+Outbox(발행)를 동일 트랜잭션에 저장하고 외부 전송은 Outbox를 소비하는 방식으로 분리.
 
 2.멱등성 보장
-
 클라이언트 제공 ID와 DB unique 제약으로 식별하고, 
 중복 충돌은 별도 REQUIRES_NEW 트랜잭션에서 판단.
 
 3.동시성 제어(선점)
-
 DB 조건부 업데이트로 선점하고 반환된 row count로 성공/실패(0/1)를 판단하는 
 lock-free CAS 패턴 (UPDATE ... WHERE status='NEW')사용.
 
 4.전송 실패 관리
-
 전송은 트랜잭션 경계 밖에서 수행하고, 결과만 별도 트랜잭션에서 반영하여 
 실패는 SendFailure에 적재하고 재시도/수동 재처리(DLQ/manual) 정책으로 관리.
 
 
 트랜잭션 / JPA
-5.JPQL update 후 영속성 컨텍스트
 
+5.JPQL update 후 영속성 컨텍스트
 JPQL update는 DB만 변경하므로 동일 트랜잭션에서 이미 로드한 엔티티를 신뢰하지 않고, 
 필요한 경우 재조회하거나 트랜잭션을 분리.
 
 6.메일 발송 호출(send()) 트랜잭션 밖에서 호출
-
 네트워크 호출은 지연 요인이므로 DB 트랜잭션 밖에서 실행해 커넥션/락을 비동기화
 
 
 운영 · 확장성
-7.모니터링 방법
 
+7.모니터링 방법
 outbox 에 실패 데이터(backlog, failure rate) 알람, 이상 시 DLQ/수동 개입 루트를 활성화.
 
 8.대량 발송 시 병목 해소 방법
-
 worker pool, rate limiting, TPS 제어, batching, Outbox→Kafka로 전환.
 
 
 보안·규정
-9. 개인 정보 관리 
 
+9. 개인 정보 관리 
 민감정보는 DB에 암호화 저장하고 admin 작업은 접근 제어.
 
 

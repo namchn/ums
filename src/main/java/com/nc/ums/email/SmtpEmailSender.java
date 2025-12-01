@@ -16,6 +16,8 @@ public class SmtpEmailSender  implements EmailSender {
      *
      * NOTE: 이 메서드는 '메일서버가 수신을 확인한 시점(2xx 응답)'을 성공으로 간주한다.
      */
+	
+	@Override
     public void send(String payload) {
         // --- 예시: 실제 SMTP 클라이언트 또는 외부 API 호출 코드가 여기에 위치 ---
         // 아래는 예시 시뮬레이션 코드입니다. 실제 환경에서는 JavaMailSender/SMTP 라이브러리나 HTTP 클라이언트를 사용
